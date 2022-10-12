@@ -6,5 +6,4 @@
 /target
 
 # dev
-.env
 *.json
