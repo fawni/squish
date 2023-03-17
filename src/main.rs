@@ -11,7 +11,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !confy::get_configuration_file_path("squish", "squish")?.exists() {
         let username = Text::new("Username").prompt()?;
         let client_id = Text::new("Client ID").prompt()?;
-        let access_token = Token::generate(&client_id).await?;
+        let access_token = Token::generate(&client_id)?;
 
         confy::store(
             "squish",
@@ -25,12 +25,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let config = confy::load::<Config>("squish", "squish")?;
-    if !Token::validate(&config.access_token).await? {
+    if !Token::validate(&config.access_token, &config.username).await? {
         confy::store(
             "squish",
             "squish",
             Config {
-                access_token: Token::generate(&config.client_id).await?,
+                access_token: Token::generate(&config.client_id)?,
                 ..config.clone()
             },
         )?;

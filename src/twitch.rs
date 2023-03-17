@@ -64,6 +64,8 @@ struct Followed {
 
 #[derive(Deserialize)]
 pub struct TokenValidation {
+    pub login: String,
+    pub scopes: Vec<String>,
     pub expires_in: i32,
 }
 
@@ -73,7 +75,10 @@ pub struct Token {
 }
 
 impl Token {
-    pub async fn validate(token: &String) -> Result<bool, Box<dyn std::error::Error>> {
+    pub async fn validate(
+        token: &String,
+        username: &String,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
         let client = Client::new();
         let res = client
             .get("https://id.twitch.tv/oauth2/validate")
@@ -85,17 +90,20 @@ impl Token {
         if !status.is_success() {
             return Ok(false);
         }
+        let res = res.json::<TokenValidation>().await?;
 
-        let expires_in = res.json::<TokenValidation>().await?.expires_in;
         // expires in a week or less
-        if expires_in <= 604_800 {
+        if res.expires_in <= 604_800
+            || !res.scopes.contains(&"user:read:follows".to_string())
+            || !res.login.eq(username)
+        {
             return Ok(false);
         }
 
         Ok(true)
     }
 
-    pub async fn generate(client_id: &String) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn generate(client_id: &String) -> Result<String, Box<dyn std::error::Error>> {
         let url = format!("https://id.twitch.tv/oauth2/authorize?response_type=token&client_id={client_id}&redirect_uri=https://twitchscopes.com/auth&scope=user%3Aread%3Afollows");
         let access_token = Text::new("Acceess Token")
             .with_help_message(&url)
