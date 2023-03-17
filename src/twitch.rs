@@ -1,28 +1,60 @@
+use inquire::Text;
 use reqwest::Client;
 use serde::Deserialize;
-use std::error::Error;
-
-use crate::config::Config;
 
 #[derive(Deserialize)]
-struct UserData {
-    id: String,
+pub struct UserData {
+    pub id: String,
 }
 
 #[derive(Deserialize)]
-struct User {
-    data: Vec<UserData>,
+pub struct User {
+    pub data: Vec<UserData>,
 }
 
-#[allow(dead_code)]
+impl User {
+    pub async fn live_channels(
+        username: &String,
+        client_id: &String,
+        token: &String,
+    ) -> Result<Vec<Channel>, Box<dyn std::error::Error>> {
+        let client = Client::new();
+        let user = client
+            .get(format!(
+                "https://api.twitch.tv/helix/users?login={username}"
+            ))
+            .header("Authorization", format!("Bearer {token}"))
+            .header("Client-id", client_id)
+            .send()
+            .await?
+            .json::<Self>()
+            .await?;
+        let id = user.data[0].id.to_string();
+
+        let live_channels = client
+            .get(format!(
+                "https://api.twitch.tv/helix/streams/followed?user_id={id}"
+            ))
+            .header("Authorization", format!("Bearer {token}"))
+            .header("Client-id", client_id)
+            .send()
+            .await?
+            .json::<Followed>()
+            .await?
+            .data;
+
+        Ok(live_channels)
+    }
+}
+
 #[derive(Deserialize)]
-pub(crate) struct Channel {
-    pub(crate) user_name: String,
-    pub(crate) game_name: String,
-    pub(crate) title: String,
-    pub(crate) viewer_count: u32,
-    pub(crate) started_at: String,
-    pub(crate) thumbnail_url: String,
+pub struct Channel {
+    pub user_name: String,
+    // pub game_name: String,
+    // pub title: String,
+    // pub viewer_count: u32,
+    // pub started_at: String,
+    // pub thumbnail_url: String,
 }
 
 #[derive(Deserialize)]
@@ -30,42 +62,45 @@ struct Followed {
     data: Vec<Channel>,
 }
 
-pub(crate) async fn get_user_id(client: &Client, cfg: &Config) -> Result<String, Box<dyn Error>> {
-    let client_id = &cfg.client_id;
-    let token = &cfg.access_token;
-    let user = client
-        .get(format!(
-            "https://api.twitch.tv/helix/users?login={}",
-            cfg.username
-        ))
-        .header("Authorization", format!("Bearer {}", token))
-        .header("Client-id", client_id)
-        .send()
-        .await?
-        .json::<User>()
-        .await?;
-    let id = user.data[0].id.to_string();
-
-    Ok(id)
+#[derive(Deserialize)]
+pub struct TokenValidation {
+    pub expires_in: i32,
 }
 
-pub(crate) async fn get_live_channels(
-    client: &Client,
-    cfg: &Config,
-    id: String,
-) -> Result<Vec<Channel>, Box<dyn Error>> {
-    let live_channels = client
-        .get(format!(
-            "https://api.twitch.tv/helix/streams/followed?user_id={}",
-            id
-        ))
-        .header("Authorization", format!("Bearer {}", &cfg.access_token))
-        .header("Client-id", &cfg.client_id)
-        .send()
-        .await?
-        .json::<Followed>()
-        .await?
-        .data;
+#[derive(Deserialize)]
+pub struct Token {
+    pub access_token: String,
+}
 
-    Ok(live_channels)
+impl Token {
+    pub async fn validate(token: &String) -> Result<bool, Box<dyn std::error::Error>> {
+        let client = Client::new();
+        let res = client
+            .get("https://id.twitch.tv/oauth2/validate")
+            .header("Authorization", format!("OAuth {token}"))
+            .send()
+            .await?;
+
+        let status = res.status();
+        if !status.is_success() {
+            return Ok(false);
+        }
+
+        let expires_in = res.json::<TokenValidation>().await?.expires_in;
+        // expires in a week or less
+        if expires_in <= 604_800 {
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
+
+    pub async fn generate(client_id: &String) -> Result<String, Box<dyn std::error::Error>> {
+        let url = format!("https://id.twitch.tv/oauth2/authorize?response_type=token&client_id={client_id}&redirect_uri=https://twitchscopes.com/auth&scope=user%3Aread%3Afollows");
+        let access_token = Text::new("Acceess Token")
+            .with_help_message(&url)
+            .prompt()?;
+
+        Ok(access_token)
+    }
 }
