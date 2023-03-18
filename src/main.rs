@@ -48,20 +48,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .prompt()?;
     let channel_url = format!("https://twitch.tv/{channel}");
 
-    thread::spawn(move || {
+    let mpv = thread::spawn(move || {
         Command::new("mpv").arg(channel_url).output().unwrap();
-    })
-    .join()
-    .unwrap();
+    });
 
-    thread::spawn(move || {
+    let chatterino = thread::spawn(move || {
         Command::new("chatterino")
             .args(["-c", &channel])
             .output()
             .unwrap();
-    })
-    .join()
-    .unwrap();
+    });
+
+    mpv.join().unwrap();
+    chatterino.join().unwrap();
 
     Ok(())
 }
