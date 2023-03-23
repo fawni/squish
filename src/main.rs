@@ -1,5 +1,5 @@
 use config::Config;
-use inquire::{Select, Text};
+use dialoguer::{theme::ColorfulTheme, Input, Select};
 use std::{process::Command, thread};
 use twitch::{Token, User};
 
@@ -9,8 +9,12 @@ mod twitch;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !confy::get_configuration_file_path("squish", "squish")?.exists() {
-        let username = Text::new("Username").prompt()?;
-        let client_id = Text::new("Client ID").prompt()?;
+        let username = Input::with_theme(&ColorfulTheme::default())
+            .with_prompt("Username")
+            .interact_text()?;
+        let client_id = Input::with_theme(&ColorfulTheme::default())
+            .with_prompt("Client ID")
+            .interact_text()?;
         let access_token = Token::generate(&client_id)?;
 
         confy::store(
@@ -42,10 +46,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|channel| channel.user_name)
         .collect::<Vec<String>>();
 
-    let channel = Select::new("Pick a channel", channels)
-        .without_help_message()
-        .with_page_size(10)
-        .prompt()?;
+    let idx = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Pick a channel")
+        .items(&channels)
+        .interact()?;
+    let channel = channels[idx].clone();
     let channel_url = format!("https://twitch.tv/{channel}");
 
     let mpv = thread::spawn(move || {

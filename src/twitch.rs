@@ -1,4 +1,4 @@
-use inquire::Text;
+use dialoguer::{theme::ColorfulTheme, Input};
 use reqwest::Client;
 use serde::Deserialize;
 
@@ -105,9 +105,10 @@ impl Token {
 
     pub fn generate(client_id: &String) -> Result<String, Box<dyn std::error::Error>> {
         let url = format!("https://id.twitch.tv/oauth2/authorize?response_type=token&client_id={client_id}&redirect_uri=https://twitchscopes.com/auth&scope=user%3Aread%3Afollows");
-        let access_token = Text::new("Acceess Token")
-            .with_help_message(&url)
-            .prompt()?;
+        let access_token = Input::with_theme(&ColorfulTheme::default())
+            .with_prompt("Access Token")
+            .with_initial_text(&url)
+            .interact_text()?;
 
         Ok(access_token)
     }
